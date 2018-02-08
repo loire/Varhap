@@ -21,5 +21,6 @@ file VARHAP.snake needs to be edited in order to:
 Then you can try:
 
 ```
+module load system/python/3.4.3
 snakemake -s VARHAP.snake  --jobs 12 --cluster "qsub -q normal.q -cwd -V -pe parallel_smp {threads}" -r
 ```

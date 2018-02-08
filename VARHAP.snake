@@ -3,19 +3,26 @@ import re
 import sys
 from os.path import join 
 
-
+###############################################################################
 # Adapt here so you can get all read pairs and ref:
 
-datadir="/homedir/loire/work/Mesoni_Janv2017/data/"
+# directory contained fastq files
+datadir="/homedir/loire/work/Mesoni_Janv2017/datasmall/"
+# path to fasta reference file
 reffile="/homedir/loire/work/Mesoni_Janv2017/ref/Ref_Alphamesonivirus_KU095838.fas"
+# extension of reads file. first part should be similar and will be used a sample id
+ext1="_R1.fastq"
+ext2="_R2.fastq"
 
-SAMPLES, = glob_wildcards(datadir+"{sample}_R1.fastq")
-
-
+# Path to script to repair unsynchronized pairs
 REPAIRPATH="/homedir/loire/bin/fastqCombinePairedEnd.py"
-REPAIRDIR = "repaired"
+
+# Number of threads for mapping, reduce if the cluster is under heavy load
 THREADS_BWA=15
 
+################################################################################
+
+SAMPLES, = glob_wildcards(datadir+"{sample}"+ext1)
 def message(mes):
 	sys.stderr.write("|---- " + mes + "\n")
 
@@ -23,6 +30,7 @@ def errormes(mes):
 	sys.stderr.write("| ERROR ----" + mes + "\n")
 
 
+REPAIRDIR = "repaired"
 NBSAMPLES = len(SAMPLES)
 
 message("Reference file is: "+str(reffile))
@@ -55,15 +63,15 @@ rule Index_Reference:
 
 rule Repair_Pairs:
 	input:
-		R1=datadir+"/{smp}_R1.fastq",
-		R2=datadir+"/{smp}_R2.fastq",
+		R1=datadir+"/{smp}"+ext1,
+		R2=datadir+"/{smp}"+ext2,
 	
 	params: exec = REPAIRPATH,
 		outdir = REPAIRDIR
 	output:	
-		REPAIRDIR+"/{smp}_R1.fastq_pairs_R1.fastq",
-		REPAIRDIR+"/{smp}_R2.fastq_pairs_R2.fastq",
-		REPAIRDIR+"/{smp}_R1.fastq_widows.fastq"
+		REPAIRDIR+"/{smp}"+ext1+"_pairs"+ext1,
+		REPAIRDIR+"/{smp}"+ext2+"_pairs"+ext2,
+#		REPAIRDIR+"/{smp}"+ext1+"_widows.fastq"
 	log: 	"logsRepairspairs/{smp}_repair.log"
 	shell:
 		"""
@@ -76,8 +84,8 @@ rule Repair_Pairs:
 rule Map_Reads_on_REF:
 	input:
 		cons=reffile,
-		R1=REPAIRDIR+"/{smp}_R1.fastq_pairs_R1.fastq",
-		R2=REPAIRDIR+"/{smp}_R2.fastq_pairs_R2.fastq",
+		R1=REPAIRDIR+"/{smp}"+ext1+"_pairs"+ext1,
+		R2=REPAIRDIR+"/{smp}"+ext2+"_pairs"+ext2,
 	output:
 		"Mapping/{smp}.bam"
 	log:	
