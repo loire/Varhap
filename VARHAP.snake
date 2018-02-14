@@ -179,6 +179,7 @@ rule freebayes:
 		"""
 		module load system/python/3.4.3
 		module load bioinfo/freebayes/0.9.21-5
+		module load system/parallel/20150822
 		PATH=$PATH:/usr/local/bioinfo/freebayes/0.9.21-5/scripts
 		freebayes-parallel <(fasta_generate_regions.py {input.index} 50000) {threads} -C 10 -F 0.01 --pooled-continuous --ploidy 1 -f {input.ref} {input.bam} 2> {log} > {output}
 		"""
