@@ -7,7 +7,7 @@ from os.path import join
 # Adapt here so you can get all read pairs and ref:
 
 # directory contained fastq files
-datadir="/homedir/loire/work/Mesoni_Janv2017/datasmall/"
+datadir="/homedir/loire/work/Mesoni_Janv2017/data/"
 # path to fasta reference file
 reffile="/homedir/loire/work/Mesoni_Janv2017/ref/Ref_Alphamesonivirus_KU095838.fas"
 # extension of reads file. first part should be similar and will be used a sample id
@@ -15,10 +15,10 @@ ext1="_R1.fastq"
 ext2="_R2.fastq"
 
 # Path to script to repair unsynchronized pairs
-REPAIRPATH="/homedir/loire/bin/fastqCombinePairedEnd.py"
+REPAIRPATH="fastqCombinePairedEnd.py"
 
 # Number of threads for mapping, reduce if the cluster is under heavy load
-THREADS_BWA=15
+THREADS_BWA=20
 
 ################################################################################
 
@@ -49,6 +49,7 @@ rule All:
 		expand("Mapping/{smp}.rmdup.bam.bai",smp=SAMPLES),
 		expand("vcf/{smp}.vcf",smp=SAMPLES),
 		expand("vcf/{smp}_filtered.vcf",smp=SAMPLES),
+		expand("vcf_consensus/{smp}_consensus.vcf",smp=SAMPLES),
 
 rule Index_Reference:
 	input:
@@ -87,7 +88,7 @@ rule Map_Reads_on_REF:
 		R1=REPAIRDIR+"/{smp}"+ext1+"_pairs"+ext1,
 		R2=REPAIRDIR+"/{smp}"+ext2+"_pairs"+ext2,
 	output:
-		"Mapping/{smp}.bam"
+		"Mapping/{smp}.unsorted.bam"
 	log:	
 		"logs/{smp}_mappingREF.log"
 	
@@ -96,7 +97,20 @@ rule Map_Reads_on_REF:
 		"""
 		module load bioinfo/samtools/1.3;
 		module load bioinfo/bwa/0.7.15;
-		bwa mem -t {threads} {input.cons} {input.R1} {input.R2} 2> {log} | samtools view -b -q 30 - | samtools sort - > {output}
+		bwa mem -t {threads} {input.cons} {input.R1} {input.R2} 2> {log} | samtools view -b -q 30 - > {output}
+        """
+
+rule SortBam:
+    input:
+        "Mapping/{smp}.unsorted.bam"
+    output:
+        "Mapping/{smp}.bam"
+    shadow:
+        "full"
+    threads: THREADS_BWA
+    shell:
+        """
+        samtools sort -@ {threads} -o {output} {input}
 		"""
 
 rule index_ref:		
@@ -165,6 +179,7 @@ rule reindex:
 
 
 
+
 rule freebayes:
 	input:
 		bam="Mapping/{smp}.rmdup.bam",
@@ -179,9 +194,25 @@ rule freebayes:
 		"""
 		module load system/python/3.4.3
 		module load bioinfo/freebayes/0.9.21-5
-		module load system/parallel/20150822
 		PATH=$PATH:/usr/local/bioinfo/freebayes/0.9.21-5/scripts
 		freebayes-parallel <(fasta_generate_regions.py {input.index} 50000) {threads} -C 10 -F 0.01 --pooled-continuous --ploidy 1 -f {input.ref} {input.bam} 2> {log} > {output}
+		"""
+rule freebayes_consensus:
+	input:
+		bam="Mapping/{smp}.rmdup.bam",
+		bai ="Mapping/{smp}.rmdup.bam.bai",
+		ref=reffile,
+		index=reffile+".fai",
+	output:
+		"vcf_consensus/{smp}_consensus.vcf"
+	threads: THREADS_BWA
+	log:	"logs/{smp}_freebayes_consensus.log"
+	shell:
+		"""
+		module load system/python/3.4.3
+		module load bioinfo/freebayes/0.9.21-5
+		PATH=$PATH:/usr/local/bioinfo/freebayes/0.9.21-5/scripts
+		freebayes-parallel <(fasta_generate_regions.py {input.index} 50000) {threads} --haplotype-length 1 --report-monomorphic -C 10 -F 0.01 --pooled-continuous --ploidy 1 -f {input.ref} {input.bam} 2> {log} > {output}
 		"""
 
 rule filter_vcf:
